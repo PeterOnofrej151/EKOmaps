@@ -297,10 +297,10 @@
       background-color: var(--primary-dark-color);
     }
 
-    /* Loading Spinner */
+    /* === VYLEPŠENIE: Loading Spinner === */
     #loadingSpinner {
       display: none;
-      position: absolute;
+      position: absolute; /* Štandardne v rámci mapy */
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -311,6 +311,18 @@
       height: 50px;
       animation: spin 1s linear infinite;
       z-index: 1002;
+    }
+    /* Nová trieda pre fullscreen režim pri inicializácii */
+    #loadingSpinner.fullscreen {
+        position: fixed; /* Zobrazenie cez celú stránku */
+        background-color: rgba(248, 249, 250, 0.85); /* Jemné podfarbenie */
+        backdrop-filter: blur(2px);
+        width: 100vw;
+        height: 100vh;
+        border-width: 8px; /* Väčší pre lepšiu viditeľnosť */
+        width: 80px;
+        height: 80px;
+        z-index: 2000; /* Na vrchu všetkého */
     }
 
     @keyframes spin {
@@ -430,6 +442,38 @@
         background-color: var(--primary-dark-color);
         transform: translateY(-1px);
     }
+    
+    /* === NOVINKA: Štýl pre potvrdzovací dialóg === */
+    #confirmModal .modal-content {
+        max-width: 450px;
+        text-align: center;
+    }
+    #confirmModal p {
+        font-size: 1.1em;
+        line-height: 1.6;
+        color: var(--text-color);
+    }
+    #confirmModal .button-container {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 30px;
+    }
+    #confirmBtnCancel {
+      background-color: #6C757D;
+      margin-right: 0;
+    }
+     #confirmBtnCancel:hover {
+      background-color: #5A6268;
+    }
+    #confirmBtnOk {
+      background-color: var(--danger-color);
+      margin-right: 0;
+    }
+    #confirmBtnOk:hover {
+      background-color: #C62828;
+    }
+
 
     /* Sekcie v sidebare */
     .sidebar-section {
@@ -796,6 +840,17 @@
   </div>
 </div>
 
+<div id="confirmModal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalText">
+  <div class="modal-content">
+    <h2 id="confirmModalTitle">Potvrdenie akcie</h2>
+    <p id="confirmModalText"></p>
+    <div class="button-container">
+      <button id="confirmBtnCancel" class="btn">Zrušiť</button>
+      <button id="confirmBtnOk" class="btn">Potvrdiť</button>
+    </div>
+  </div>
+</div>
+
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/read-excel-file@5.8.8/bundle/read-excel-file.min.js"></script>
@@ -886,6 +941,31 @@
       style: { background: backgroundColor, borderRadius: '5px', boxShadow: '0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)' },
     }).showToast();
   }
+  
+  // === NOVINKA: Vlastný potvrdzovací dialóg (nahradzuje confirm()) ===
+  const confirmModal = document.getElementById('confirmModal');
+  const confirmModalText = document.getElementById('confirmModalText');
+  const confirmBtnOk = document.getElementById('confirmBtnOk');
+  const confirmBtnCancel = document.getElementById('confirmBtnCancel');
+
+  function showConfirmation(message) {
+      return new Promise(resolve => {
+          confirmModalText.textContent = message;
+          confirmModal.style.display = 'block';
+
+          // Použijeme .onclick namiesto .addEventListener, aby sme jednoducho prepísali predchádzajúci listener
+          confirmBtnOk.onclick = () => {
+              confirmModal.style.display = 'none';
+              resolve(true);
+          };
+
+          confirmBtnCancel.onclick = () => {
+              confirmModal.style.display = 'none';
+              resolve(false);
+          };
+      });
+  }
+
 
   function getFilteredLokality() {
     const typFilter = document.getElementById('filter').value;
@@ -978,15 +1058,15 @@
     showToast("Dáta boli uložené a zálohované do súboru.", 'success');
   }
 
-  function clearAllData() {
-      if (confirm("Naozaj chcete vymazať všetky uložené dáta lokalít? Táto akcia je nevratná!")) {
+  async function clearAllData() {
+      if (await showConfirmation("Naozaj chcete vymazať všetky uložené dáta lokalít? Táto akcia je nevratná!")) {
           localStorage.removeItem('lokalityPSK'); lokality = []; aktualizujUI();
           showToast("Všetky dáta boli vymazané.", 'warning');
       }
   }
 
-  function deleteLokalita(index) {
-    if (confirm(`Naozaj chcete vymazať lokalitu "${lokality[index].name}"?`)) {
+  async function deleteLokalita(index) {
+    if (await showConfirmation(`Naozaj chcete vymazať lokalitu "${lokality[index].name}"?`)) {
       lokality.splice(index, 1); aktualizujUI();
       showToast("Lokalita bola úspešne vymazaná.", 'success');
     }
@@ -1006,8 +1086,18 @@
     modalElement.style.display = 'none';
   }
 
-  document.getElementById('closeEditModal').onclick = () => { if (confirm("Naozaj chcete zatvoriť okno? Neuložené zmeny sa stratia.")) { closeModal(editModal); } };
-  document.getElementById('closeEditModal').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { if (confirm("Naozaj chcete zatvoriť okno? Neuložené zmeny sa stratia.")) { closeModal(editModal); } } };
+  document.getElementById('closeEditModal').onclick = async () => { 
+    if (await showConfirmation("Naozaj chcete zatvoriť okno? Neuložené zmeny sa stratia.")) { 
+        closeModal(editModal); 
+    } 
+  };
+  document.getElementById('closeEditModal').onkeydown = async (e) => { 
+    if (e.key === 'Enter' || e.key === ' ') { 
+        if (await showConfirmation("Naozaj chcete zatvoriť okno? Neuložené zmeny sa stratia.")) { 
+            closeModal(editModal); 
+        } 
+    } 
+  };
 
   function editLokalita(index) {
     const l = lokality[index];
@@ -1120,8 +1210,8 @@
     }
   });
 
-  closeAddModalButton.onclick = () => {
-    if (confirm("Naozaj chcete zatvoriť okno? Neuložené zmeny sa stratia.")) {
+  closeAddModalButton.onclick = async () => {
+    if (await showConfirmation("Naozaj chcete zatvoriť okno? Neuložené zmeny sa stratia.")) {
         closeModal(addModal);
         if (tempMarker) { tempMarker.remove(); tempMarker = null; }
     }
@@ -1163,7 +1253,7 @@
     loadingSpinner.style.display = 'block';
 
     try {
-        if (!confirm("Naozaj chcete importovať dáta z Excelu? Týmto sa prepíšu všetky aktuálne neuložené dáta.")) {
+        if (!await showConfirmation("Naozaj chcete importovať dáta z Excelu? Týmto sa prepíšu všetky aktuálne dáta.")) {
             e.target.value = ''; // Reset input
             loadingSpinner.style.display = 'none';
             return;
@@ -1227,11 +1317,11 @@
     }
   });
 
-  document.getElementById('jsonInput').addEventListener('change', e => {
+  document.getElementById('jsonInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!confirm("Naozaj chcete obnoviť dáta zo zálohy? Týmto sa prepíšu všetky aktuálne neuložené dáta.")) {
+    if (!await showConfirmation("Naozaj chcete obnoviť dáta zo zálohy? Týmto sa prepíšu všetky aktuálne dáta.")) {
         e.target.value = '';
         return;
     }
@@ -1372,65 +1462,54 @@
    * Následne aktualizuje používateľské rozhranie a zobrazí úvodné okno pri prvej návšteve.
    */
   async function initializeApp() {
-    // Pokus o načítanie dát z externého súboru zalohy_lokality_PSK.json
+    // === VYLEPŠENIE: Zobrazenie fullscreen spinnera počas inicializácie ===
+    loadingSpinner.classList.add('fullscreen');
+    loadingSpinner.style.display = 'block';
+    
     try {
-        const response = await fetch('zalohy_lokality_PSK.json', {
-            // Hlavička 'Cache-Control: no-cache' zabezpečí, že prehliadač
-            // vždy načíta najnovšiu verziu súboru priamo zo servera.
-            cache: 'no-cache'
-        });
+        // Pokus o načítanie dát z externého súboru zalohy_lokality_PSK.json
+        const response = await fetch('zalohy_lokality_PSK.json', { cache: 'no-cache' });
 
-        // Skontroluje, či bol súbor úspešne nájdený a načítaný (HTTP status 200-299)
         if (!response.ok) {
             throw new Error(`Súbor 'zalohy_lokality_PSK.json' sa nepodarilo načítať. Status: ${response.status}`);
         }
-
-        // Prevedie odpoveď zo servera na formát JSON
         const dataFromFile = await response.json();
         
-        // Overí, či dáta v súbore sú vo formáte poľa (array)
         if (!Array.isArray(dataFromFile)) {
             throw new Error('Formát dát v súbore zálohy nie je správny (očakáva sa pole).');
         }
-
-        // Ak všetko prebehlo v poriadku, priradí načítané dáta do hlavnej premennej
         lokality = dataFromFile;
         showToast("Dáta boli úspešne načítané zo súboru zálohy.", 'success');
 
     } catch (error) {
-        // Táto časť kódu sa vykoná, ak nastala akákoľvek chyba v 'try' bloku
         console.warn("Chyba pri načítaní externej zálohy:", error.message);
-        
-        // Ako záložné riešenie sa pokúsi načítať dáta z lokálneho úložiska
         const localData = localStorage.getItem("lokalityPSK");
         lokality = localData ? JSON.parse(localData) : [];
-        
         showToast("Externú zálohu sa nepodarilo načítať. Obnovujú sa dáta z lokálneho úložiska.", 'warning');
+    } finally {
+        // === VYLEPŠENIE: Skrytie fullscreen spinnera po dokončení ===
+        loadingSpinner.classList.remove('fullscreen');
+        loadingSpinner.style.display = 'none';
     }
 
-    // Po načítaní dát (buď zo súboru alebo z localStorage) sa aktualizuje celá mapa a zoznam
     aktualizujUI();
 
-    // Zobrazenie úvodného okna, ak používateľ navštívil stránku prvýkrát v rámci session
     const hasVisited = sessionStorage.getItem('hasVisitedEcoTransportMap');
     if (!hasVisited) {
         openModal(welcomeModal);
     }
 
-    // Nastavenie funkcionality pre tlačidlo na zatvorenie úvodného okna
     document.getElementById('closeWelcomeModal').addEventListener('click', () => {
         closeModal(welcomeModal);
         sessionStorage.setItem('hasVisitedEcoTransportMap', 'true');
-        // Prepočíta veľkosť mapy po zatvorení modálneho okna, aby sa predišlo chybám v zobrazení
         mapa.invalidateSize();
     });
     
-    // Počiatočné prepočítanie veľkosti mapy, aby sa predišlo chybám pri načítaní
     setTimeout(() => mapa.invalidateSize(), 100);
   }
 
   // Spustenie inicializačnej funkcie hneď po načítaní celej stránky
-initializeApp();
+  initializeApp();
 
 </script>
 </body>
